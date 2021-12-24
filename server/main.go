@@ -7,10 +7,10 @@ import (
 func main() {
 	const fileName = `Proposal Skripsi - Andre_FinalDraft.pdf`
 
-	fileTransfer, err := uc.ChunkingFiles(fileName)
+	fileParts, err := uc.ChunkingFiles(fileName)
 	if err != nil {
 		panic(err)
 	}
-	uc.MergingFiles(fileTransfer)
-	// fmt.Printf("%+v", fileParts)
+
+	sendMessageUDP(fileParts)
 }

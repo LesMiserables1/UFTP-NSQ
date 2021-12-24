@@ -1,8 +1,8 @@
 package usecase
 
-type fileTransfer struct {
+type FileTransfer struct {
 	Part     int
 	FileByte []byte
 }
 
-const megabytes = 4 * 1024
+const Megabytes = 4 * 1024

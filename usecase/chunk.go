@@ -7,23 +7,23 @@ import (
 	"os"
 )
 
-func ChunkingFiles(fileName string) ([]fileTransfer, error) {
-	const absPath = `./files/`
+func ChunkingFiles(fileName string) ([]FileTransfer, error) {
+	const absPath = `../files/`
 
 	var filePath = absPath + fileName
 	dataFile, err := os.Open(filePath)
 	if err != nil {
-		return []fileTransfer{}, err
+		return []FileTransfer{}, err
 	}
 	defer dataFile.Close()
 
-	var fileTransfers []fileTransfer
+	var fileTransfers []FileTransfer
 
 	r := bufio.NewReader(dataFile)
 
 	x := 0
 	for {
-		buf := make([]byte, megabytes)
+		buf := make([]byte, Megabytes)
 
 		n, err := r.Read(buf)
 
@@ -33,7 +33,7 @@ func ChunkingFiles(fileName string) ([]fileTransfer, error) {
 		if n == 0 {
 			break
 		}
-		fileTransfers = append(fileTransfers, fileTransfer{
+		fileTransfers = append(fileTransfers, FileTransfer{
 			Part:     x,
 			FileByte: buf,
 		})
@@ -42,8 +42,8 @@ func ChunkingFiles(fileName string) ([]fileTransfer, error) {
 	return fileTransfers, nil
 }
 
-func MergingFiles(fileTransfers []fileTransfer) {
-	fileName := "./files/output.pdf"
+func MergingFiles(fileTransfers []FileTransfer) {
+	fileName := "../files/output.pdf"
 	_, err := os.Create(fileName)
 	if err != nil {
 		panic(err)
