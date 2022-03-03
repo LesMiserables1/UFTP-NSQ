@@ -3,18 +3,23 @@ package main
 import (
 	"bytes"
 	"encoding/gob"
+	"encoding/json"
 	"log"
 	"net"
 	"strconv"
 	"time"
 
 	uc "github.com/LesMiserables1/UFTP-NSQ/usecase"
-	nsq "github.com/nsqio/go-nsq"
+	"github.com/nsqio/go-nsq"
 )
 
-var receiveTime = time.Now()
+type Message struct {
+	ArrayMissingParts []int
+}
 
-func sendMessageUDP(fileTransfer []uc.FileTransfer) {
+var FileParts []uc.FileTransfer
+
+func sendMessageUDP(missingPart []int) {
 
 	connection, err := net.Dial("udp", "127.0.0.1:3000")
 	if err != nil {
@@ -22,13 +27,14 @@ func sendMessageUDP(fileTransfer []uc.FileTransfer) {
 	}
 
 	defer connection.Close()
-
-	for _, filePart := range fileTransfer {
+	for _, filePart := range missingPart {
+		missingFilePart, _ := _map.Load("fileParts")
+		missingFilePart = missingFilePart.([]uc.FileTransfer)[filePart]
 		var packet bytes.Buffer
 
 		enc := gob.NewEncoder(&packet)
 
-		err := enc.Encode(filePart)
+		err := enc.Encode(missingFilePart)
 		if err != nil {
 			panic(err)
 		}
@@ -44,17 +50,32 @@ type myMessageHandler struct{}
 
 func (h *myMessageHandler) HandleMessage(m *nsq.Message) error {
 	if len(m.Body) == 0 {
-		// Returning nil will automatically send a FIN command to NSQ to mark the message as processed.
-		// In this case, a message with an empty body is simply ignored/discarded.
 		return nil
 	}
-	receiveTime = time.Now()
-	// do whatever actual message processing is desired
+	_map.LoadOrStore("receiveTime", time.Now())
+	if string(m.Body[:]) != "SELESAI" {
+		resMessage := Message{}
+		err := json.Unmarshal([]byte(m.Body), &resMessage)
+		if err != nil {
+			panic(err)
+		}
+		sendMessageUDP(resMessage.ArrayMissingParts)
+	}
 
-	// Returning a non-nil error will automatically send a REQ command to NSQ to re-queue the message.
 	return nil
 }
-
+func receiveMessage() {
+	config := nsq.NewConfig()
+	consumer, err := nsq.NewConsumer("missingFile", "channel", config)
+	if err != nil {
+		log.Fatal(err)
+	}
+	consumer.AddHandler(&myMessageHandler{})
+	err = consumer.ConnectToNSQLookupd("localhost:4161")
+	if err != nil {
+		log.Fatal(err)
+	}
+}
 func sendMessage(lengthFile int) {
 	// Instantiate a producer.
 	config := nsq.NewConfig()
@@ -67,11 +88,13 @@ func sendMessage(lengthFile int) {
 	messageBody := []byte(strconv.Itoa(lengthFile))
 	topicName := "lengthFile"
 	for {
-		if time.Since(receiveTime).Seconds() >= 60 {
+		receiveTime, _ := _map.Load("receiveTime")
+		if time.Since(receiveTime.(time.Time)).Seconds() >= 60 {
 			err = producer.Publish(topicName, messageBody)
 			if err != nil {
 				log.Fatal(err)
 			}
 		}
+		_map.Store("receiveTime", time.Now())
 	}
 }

@@ -19,6 +19,7 @@ type Message struct {
 }
 
 var File []uc.FileTransfer
+var Status bool
 
 func receiveMessageUDP() []uc.FileTransfer {
 
@@ -42,15 +43,13 @@ func receiveMessageUDP() []uc.FileTransfer {
 }
 func listen(connection *net.UDPConn, quit chan struct{}) {
 	inputBytes := make([]byte, 5*1024)
-	for File[170].Part == 0 {
-
+	for !Status {
 		n, _, err := connection.ReadFromUDP(inputBytes)
 		if err == nil {
 			appendFile(inputBytes, n)
 		} else {
 			fmt.Println(err)
 		}
-
 	}
 	quit <- struct{}{}
 }
@@ -80,7 +79,20 @@ func (h *myMessageHandler) HandleMessage(m *nsq.Message) error {
 	sendMessage(lengthSize)
 	return nil
 }
+func receiveMessage() {
+	config := nsq.NewConfig()
 
+	consumer, err := nsq.NewConsumer("lengthFile", "channel", config)
+	if err != nil {
+		log.Fatal(err)
+	}
+	consumer.AddHandler(&myMessageHandler{})
+
+	err = consumer.ConnectToNSQLookupd("localhost:4161")
+	if err != nil {
+		log.Fatal(err)
+	}
+}
 func sendMessage(lengthFile int) {
 	config := nsq.NewConfig()
 
@@ -88,18 +100,34 @@ func sendMessage(lengthFile int) {
 	if err != nil {
 		log.Fatal(err)
 	}
-
+	fileMissingArray := findMissingPart()
 	missingPart := Message{
-		ArrayMissingParts: findMissingPart(),
-	}
-	messageBody, err := json.Marshal(missingPart)
-	if err != nil {
-		log.Fatal(err)
+		ArrayMissingParts: fileMissingArray,
 	}
 	topicName := "missingFile"
-	err = producer.Publish(topicName, messageBody)
-	if err != nil {
-		log.Fatal(err)
+	fmt.Println(missingPart.ArrayMissingParts)
+
+	if len(missingPart.ArrayMissingParts) == 0 {
+		messageBody := []byte("SELESAI")
+		if err != nil {
+			log.Fatal(err)
+		}
+		err = producer.Publish(topicName, messageBody)
+		if err != nil {
+			log.Fatal(err)
+		}
+		Status = true
+	} else {
+		fmt.Println(fileMissingArray)
+
+		messageBody, err := json.Marshal(missingPart)
+		if err != nil {
+			log.Fatal(err)
+		}
+		err = producer.Publish(topicName, messageBody)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 }
 
