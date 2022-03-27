@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net"
 	"strconv"
@@ -27,7 +28,7 @@ func sendMessageUDP(missingPart []int) {
 	}
 
 	defer connection.Close()
-	for _, filePart := range missingPart {
+	for i, filePart := range missingPart {
 		missingFilePart, _ := _map.Load("fileParts")
 		missingFilePart = missingFilePart.([]uc.FileTransfer)[filePart]
 		var packet bytes.Buffer
@@ -43,6 +44,7 @@ func sendMessageUDP(missingPart []int) {
 		if err != nil {
 			panic(err)
 		}
+		fmt.Println(i)
 	}
 }
 
@@ -94,7 +96,8 @@ func sendMessage(lengthFile int) {
 			if err != nil {
 				log.Fatal(err)
 			}
+			_map.Store("receiveTime", time.Now())
+
 		}
-		_map.Store("receiveTime", time.Now())
 	}
 }

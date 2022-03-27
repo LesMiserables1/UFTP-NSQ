@@ -9,6 +9,7 @@ import (
 	"net"
 	"runtime"
 	"strconv"
+	"time"
 
 	uc "github.com/LesMiserables1/UFTP-NSQ/usecase"
 	"github.com/nsqio/go-nsq"
@@ -19,7 +20,6 @@ type Message struct {
 }
 
 var File []uc.FileTransfer
-var Status bool
 
 func receiveMessageUDP() []uc.FileTransfer {
 
@@ -32,24 +32,29 @@ func receiveMessageUDP() []uc.FileTransfer {
 		panic(err)
 	}
 	defer connection.Close()
-
 	quit := make(chan struct{})
 
 	for i := 0; i < runtime.NumCPU(); i++ {
 		go listen(connection, quit)
 	}
 	<-quit
-	return File
+	files, _ := _map.Load("Files")
+	return files.([]uc.FileTransfer)
 }
 func listen(connection *net.UDPConn, quit chan struct{}) {
 	inputBytes := make([]byte, 5*1024)
-	for !Status {
+	status, _ := _map.Load("Status")
+	for !status.(bool) {
 		n, _, err := connection.ReadFromUDP(inputBytes)
 		if err == nil {
+			_map.Store("receiveTime", time.Now())
 			appendFile(inputBytes, n)
 		} else {
 			fmt.Println(err)
 		}
+		fmt.Println(status.(bool))
+		status, _ = _map.Load("Status")
+
 	}
 	quit <- struct{}{}
 }
@@ -60,8 +65,11 @@ func appendFile(inputBytes []byte, n int) {
 	var filePart uc.FileTransfer
 	err := dec.Decode(&filePart)
 
+	files, _ := _map.Load("Files")
+
 	if err == nil {
-		File[filePart.Part] = filePart
+		files.([]uc.FileTransfer)[filePart.Part] = filePart
+		_map.Store("Files", files)
 	}
 }
 
@@ -76,6 +84,8 @@ func (h *myMessageHandler) HandleMessage(m *nsq.Message) error {
 		log.Fatal(err)
 	}
 	File = make([]uc.FileTransfer, lengthSize)
+	_map.Store("Files", File)
+
 	sendMessage(lengthSize)
 	return nil
 }
@@ -100,43 +110,53 @@ func sendMessage(lengthFile int) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fileMissingArray := findMissingPart()
-	missingPart := Message{
-		ArrayMissingParts: fileMissingArray,
-	}
-	topicName := "missingFile"
-	fmt.Println(missingPart.ArrayMissingParts)
 
-	if len(missingPart.ArrayMissingParts) == 0 {
-		messageBody := []byte("SELESAI")
-		if err != nil {
-			log.Fatal(err)
+	for {
+		receiveTime, _ := _map.Load("receiveTime")
+		fileMissingArray := findMissingPart()
+		missingPart := Message{
+			ArrayMissingParts: fileMissingArray,
 		}
-		err = producer.Publish(topicName, messageBody)
-		if err != nil {
-			log.Fatal(err)
+		topicName := "missingFile"
+		if len(missingPart.ArrayMissingParts) == 0 {
+			_map.Store("Status", true)
 		}
-		Status = true
-	} else {
-		fmt.Println(fileMissingArray)
+		if time.Since(receiveTime.(time.Time)).Seconds() >= 60 {
+			_map.Store("receiveTime", time.Now())
+			if len(missingPart.ArrayMissingParts) == 0 {
+				messageBody := []byte("SELESAI")
+				if err != nil {
+					log.Fatal(err)
+				}
+				err = producer.Publish(topicName, messageBody)
+				if err != nil {
+					log.Fatal(err)
+				}
+				_map.Store("Status", true)
+			} else {
 
-		messageBody, err := json.Marshal(missingPart)
-		if err != nil {
-			log.Fatal(err)
-		}
-		err = producer.Publish(topicName, messageBody)
-		if err != nil {
-			log.Fatal(err)
+				messageBody, err := json.Marshal(missingPart)
+				if err != nil {
+					log.Fatal(err)
+				}
+				err = producer.Publish(topicName, messageBody)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
 		}
 	}
+
 }
 
 func findMissingPart() []int {
 	var result []int
-	for i, values := range File {
-		if values.Part == 0 {
+	files, _ := _map.Load("Files")
+	for i, values := range files.([]uc.FileTransfer) {
+		if len(values.FileByte) == 0 {
 			result = append(result, i)
 		}
+
 	}
 	return result
 }

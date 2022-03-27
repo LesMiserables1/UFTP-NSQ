@@ -39,6 +39,7 @@ func ChunkingFiles(fileName string) ([]FileTransfer, error) {
 		})
 		x++
 	}
+	fmt.Println(x)
 	return fileTransfers, nil
 }
 

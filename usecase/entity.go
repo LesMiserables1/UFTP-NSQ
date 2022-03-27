@@ -5,4 +5,4 @@ type FileTransfer struct {
 	FileByte []byte
 }
 
-const Megabytes = 4 * 1024
+const Megabytes = 5000
