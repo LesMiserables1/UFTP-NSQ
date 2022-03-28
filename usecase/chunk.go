@@ -23,7 +23,7 @@ func ChunkingFiles(fileName string) ([]FileTransfer, error) {
 
 	x := 0
 	for {
-		buf := make([]byte, Megabytes)
+		buf := make([]byte, PartSize)
 
 		n, err := r.Read(buf)
 
