@@ -24,13 +24,13 @@ func ChunkingFiles(fileName string) ([]FileTransfer, error) {
 		if err != nil && err != io.EOF {
 			return nil, err
 		}
-		if n == 0 {
-			break
-		}
 		fileTransfers = append(fileTransfers, FileTransfer{
 			Part:     x,
 			FileByte: buf,
 		})
+		if n == 0 {
+			break
+		}
 		x++
 	}
 	return fileTransfers, nil
