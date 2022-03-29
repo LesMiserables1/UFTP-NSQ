@@ -1,7 +1,6 @@
 package usecase
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"os"
@@ -9,7 +8,6 @@ import (
 
 func ChunkingFiles(fileName string) ([]FileTransfer, error) {
 	const absPath = `../files/`
-
 	var filePath = absPath + fileName
 	dataFile, err := os.Open(filePath)
 	if err != nil {
@@ -19,14 +17,10 @@ func ChunkingFiles(fileName string) ([]FileTransfer, error) {
 
 	var fileTransfers []FileTransfer
 
-	r := bufio.NewReader(dataFile)
-
 	x := 0
 	for {
 		buf := make([]byte, PartSize)
-
-		n, err := r.Read(buf)
-
+		n, err := dataFile.Read(buf)
 		if err != nil && err != io.EOF {
 			return nil, err
 		}
@@ -39,7 +33,6 @@ func ChunkingFiles(fileName string) ([]FileTransfer, error) {
 		})
 		x++
 	}
-	fmt.Println(x)
 	return fileTransfers, nil
 }
 
